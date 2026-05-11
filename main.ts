@@ -267,10 +267,21 @@ interface ParsedLink {
   title: string | null; // null = needs fetch
 }
 
-// Parses one clipboard line. Supports:
+// Parses one clipboard line. Supports (with optional leading indent/bullet/checkbox):
+//   "[Title](https://...)"           → use provided title and URL
 //   "https://example.com"            → fetch title
 //   "https://example.com | My Title" → use provided title
 function parseClipboardLine(line: string): ParsedLink | null {
+  // Strip leading whitespace, bullet (- * +), and checkbox ([ ] / [x])
+  const stripped = line.replace(/^[\t ]*(?:[-*+]\s+)?(?:\[[ xX]\]\s+)?/, "");
+
+  // Markdown link: [title](url)
+  const mdMatch = stripped.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)/);
+  if (mdMatch) {
+    return { url: mdMatch[2], title: mdMatch[1].trim() };
+  }
+
+  // "URL | Title" format
   const pipeIdx = line.indexOf(" | ");
   if (pipeIdx !== -1) {
     const url = line.slice(0, pipeIdx).trim();
@@ -279,10 +290,13 @@ function parseClipboardLine(line: string): ParsedLink | null {
       return { url, title: title || null };
     }
   }
+
+  // Plain URL
   const trimmed = line.trim();
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
     return { url: trimmed, title: null };
   }
+
   return null;
 }
 

@@ -51,6 +51,8 @@ Read It Later: Add link from clipboard
 |---|---|
 | `https://example.com` | ページにアクセスしてタイトルを自動取得 |
 | `https://example.com \| タイトル` | 指定タイトルをそのまま使用（ネットワーク不要） |
+| `[タイトル](https://example.com)` | Markdown リンクからタイトルと URL を取得（ネットワーク不要） |
+| `  - [ ] [タイトル](https://...)` | 先頭のインデント・バレット・チェックボックスは無視 |
 
 ### リンクを既読にする
 
