@@ -1,6 +1,8 @@
 # Obsidian Read It Later
 
-Obsidian 用の「後で読む」リンク管理プラグインです。[Raindrop.io](https://raindrop.io) のように、リンクを一箇所に保存し、読んだらクリックするだけで既読に移動できます。
+Obsidian 用の「後で読む」リンク管理プラグインです。
+
+[OneTab](https://www.one-tab.com/) のリンクをクリックするとそのままタブが閉じられる操作感を Obsidian 上で再現したくて作りました。リンクを一箇所に保存しておき、読んだらクリックするだけで自動的に既読に移動します。
 
 ## 機能
 
