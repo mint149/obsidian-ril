@@ -105,7 +105,31 @@ export default class RilPlugin extends Plugin {
       return;
     }
 
-    const needFetch = parsed.filter((p) => p.title === null).length;
+    // Read file first to check for duplicates before fetching titles
+    await this.ensureFileExists();
+    const file = this.app.vault.getAbstractFileByPath(this.settings.readLaterFile);
+    if (!(file instanceof TFile)) {
+      new Notice("ファイルのアクセスに失敗しました");
+      return;
+    }
+    const existingContent = await this.app.vault.read(file);
+    const existingUrls = extractUnreadUrls(existingContent);
+
+    const newItems = parsed.filter(({ url }) => {
+      if (existingUrls.has(url)) {
+        console.log(`[RIL] skipped duplicate: ${url}`);
+        return false;
+      }
+      return true;
+    });
+    const skipped = parsed.length - newItems.length;
+
+    if (newItems.length === 0) {
+      new Notice(`すべて重複のためスキップしました (${skipped} 件)`);
+      return;
+    }
+
+    const needFetch = newItems.filter((p) => p.title === null).length;
     const notice = new Notice(
       needFetch > 0 ? `ページタイトルを取得中… (0 / ${needFetch})` : "保存中…",
       0
@@ -113,9 +137,8 @@ export default class RilPlugin extends Plugin {
 
     let done = 0;
     const entries = await Promise.all(
-      parsed.map(async ({ url, title }) => {
+      newItems.map(async ({ url, title }) => {
         if (title === null) {
-          // Title not provided — fetch from page
           try {
             const res = await requestUrl({ url, method: "GET" });
             const m = res.text.match(/<title[^>]*>([^<]+)<\/title>/i);
@@ -134,23 +157,17 @@ export default class RilPlugin extends Plugin {
 
     notice.hide();
 
-    await this.ensureFileExists();
-    const file = this.app.vault.getAbstractFileByPath(
-      this.settings.readLaterFile
-    );
-    if (!(file instanceof TFile)) {
-      new Notice("ファイルのアクセスに失敗しました");
-      return;
-    }
-
-    // Insert all entries at once to avoid repeated file reads
-    let content = await this.app.vault.read(file);
+    let content = existingContent;
     for (const entry of entries) {
       content = insertIntoUnread(content, entry);
     }
     await this.app.vault.modify(file, content);
+
+    const skippedNote = skipped > 0 ? `（${skipped} 件重複スキップ）` : "";
     new Notice(
-      urls.length === 1 ? `保存しました: ${entries[0]}` : `${urls.length} 件保存しました`
+      newItems.length === 1
+        ? `保存しました: ${newItems[0].title ?? newItems[0].url}${skippedNote}`
+        : `${newItems.length} 件保存しました${skippedNote}`
     );
   }
 
@@ -246,6 +263,21 @@ function parseClipboardLine(line: string): ParsedLink | null {
     return { url: trimmed, title: null };
   }
   return null;
+}
+
+// Collects all URLs from the 未読 section of the file.
+function extractUnreadUrls(content: string): Set<string> {
+  const lines = content.split("\n");
+  const unreadIdx = lines.findIndex((l) => l.trimEnd() === UNREAD_HEADER);
+  const readIdx = lines.findIndex((l) => l.trimEnd() === READ_HEADER);
+  if (unreadIdx === -1) return new Set();
+  const unreadEnd = readIdx > unreadIdx && readIdx !== -1 ? readIdx : lines.length;
+  const urls = new Set<string>();
+  for (let i = unreadIdx + 1; i < unreadEnd; i++) {
+    const m = lines[i].match(/\]\((https?:\/\/[^)]+)\)/);
+    if (m) urls.add(m[1]);
+  }
+  return urls;
 }
 
 // Returns the URL of the markdown link [text](url) that contains posInLine, or null.
