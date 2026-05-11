@@ -150,8 +150,7 @@ export default class RilPlugin extends Plugin {
           done++;
           notice.setMessage(`ページタイトルを取得中… (${done} / ${needFetch})`);
         }
-        const date = new Date().toISOString().split("T")[0];
-        return `- [ ] [${title}](${url}) <!-- ${date} -->`;
+        return `- [ ] [${title}](${url}) <!-- ${localDatetime()} -->`;
       })
     );
 
@@ -266,6 +265,12 @@ function parseClipboardLine(line: string): ParsedLink | null {
 }
 
 // Collects all URLs from the 未読 section of the file.
+function localDatetime(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
 function extractUnreadUrls(content: string): Set<string> {
   const lines = content.split("\n");
   const unreadIdx = lines.findIndex((l) => l.trimEnd() === UNREAD_HEADER);
