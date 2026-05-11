@@ -95,34 +95,38 @@ export default class RilPlugin extends Plugin {
       return;
     }
 
-    const urls = text
+    const parsed = text
       .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("http://") || l.startsWith("https://"));
+      .map(parseClipboardLine)
+      .filter((item): item is ParsedLink => item !== null);
 
-    if (urls.length === 0) {
+    if (parsed.length === 0) {
       new Notice("クリップボードにURLが見つかりません");
       return;
     }
 
+    const needFetch = parsed.filter((p) => p.title === null).length;
     const notice = new Notice(
-      `ページタイトルを取得中… (0 / ${urls.length})`,
+      needFetch > 0 ? `ページタイトルを取得中… (0 / ${needFetch})` : "保存中…",
       0
     );
 
     let done = 0;
     const entries = await Promise.all(
-      urls.map(async (url) => {
-        let title = url;
-        try {
-          const res = await requestUrl({ url, method: "GET" });
-          const m = res.text.match(/<title[^>]*>([^<]+)<\/title>/i);
-          if (m) title = m[1].trim().replace(/\s+/g, " ");
-        } catch {
-          // title stays as url
+      parsed.map(async ({ url, title }) => {
+        if (title === null) {
+          // Title not provided — fetch from page
+          try {
+            const res = await requestUrl({ url, method: "GET" });
+            const m = res.text.match(/<title[^>]*>([^<]+)<\/title>/i);
+            if (m) title = m[1].trim().replace(/\s+/g, " ");
+          } catch {
+            // fall back to URL as title
+          }
+          title = title ?? url;
+          done++;
+          notice.setMessage(`ページタイトルを取得中… (${done} / ${needFetch})`);
         }
-        done++;
-        notice.setMessage(`ページタイトルを取得中… (${done} / ${urls.length})`);
         const date = new Date().toISOString().split("T")[0];
         return `- [ ] [${title}](${url}) <!-- ${date} -->`;
       })
@@ -218,6 +222,30 @@ export default class RilPlugin extends Plugin {
   async saveSettings() {
     await this.saveData(this.settings);
   }
+}
+
+interface ParsedLink {
+  url: string;
+  title: string | null; // null = needs fetch
+}
+
+// Parses one clipboard line. Supports:
+//   "https://example.com"            → fetch title
+//   "https://example.com | My Title" → use provided title
+function parseClipboardLine(line: string): ParsedLink | null {
+  const pipeIdx = line.indexOf(" | ");
+  if (pipeIdx !== -1) {
+    const url = line.slice(0, pipeIdx).trim();
+    const title = line.slice(pipeIdx + 3).trim();
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return { url, title: title || null };
+    }
+  }
+  const trimmed = line.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return { url: trimmed, title: null };
+  }
+  return null;
 }
 
 // Returns the URL of the markdown link [text](url) that contains posInLine, or null.
