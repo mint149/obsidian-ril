@@ -38,6 +38,12 @@ export default class RilPlugin extends Plugin {
       callback: () => this.clearArchived(),
     });
 
+    this.addCommand({
+      id: "count-unread",
+      name: "Show unread count",
+      callback: () => this.showUnreadCount(),
+    });
+
     // Window-level capture for Reading Mode
     this.registerDomEvent(
       window,
@@ -174,6 +180,17 @@ export default class RilPlugin extends Plugin {
         ? `保存しました: ${newItems[0].title ?? newItems[0].url}${skippedNote}`
         : `${newItems.length} 件保存しました${skippedNote}`
     );
+  }
+
+  private async showUnreadCount() {
+    const file = this.app.vault.getAbstractFileByPath(this.settings.readLaterFile);
+    if (!(file instanceof TFile)) {
+      new Notice("未読リンクはありません (ファイル未作成)");
+      return;
+    }
+    const content = await this.app.vault.read(file);
+    const count = extractUnreadUrls(content).size;
+    new Notice(count === 0 ? "未読リンクはありません" : `未読: ${count} 件`);
   }
 
   private async clearArchived() {
