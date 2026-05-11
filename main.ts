@@ -32,6 +32,12 @@ export default class RilPlugin extends Plugin {
       callback: () => this.addLinkFromClipboard(),
     });
 
+    this.addCommand({
+      id: "clear-archived",
+      name: "Clear all archived links",
+      callback: () => this.clearArchived(),
+    });
+
     // Window-level capture for Reading Mode
     this.registerDomEvent(
       window,
@@ -170,6 +176,22 @@ export default class RilPlugin extends Plugin {
     );
   }
 
+  private async clearArchived() {
+    const file = this.app.vault.getAbstractFileByPath(this.settings.readLaterFile);
+    if (!(file instanceof TFile)) {
+      new Notice("ファイルが見つかりません");
+      return;
+    }
+    const content = await this.app.vault.read(file);
+    const { result, removed } = clearArchivedSection(content);
+    if (removed === 0) {
+      new Notice("既読リンクはありません");
+      return;
+    }
+    await this.app.vault.modify(file, result);
+    new Notice(`既読を ${removed} 件削除しました`);
+  }
+
   private handleLinkClick(evt: MouseEvent) {
     if (evt.button !== 0) return;
 
@@ -265,6 +287,17 @@ function parseClipboardLine(line: string): ParsedLink | null {
 }
 
 // Collects all URLs from the 未読 section of the file.
+function clearArchivedSection(content: string): { result: string; removed: number } {
+  const lines = content.split("\n");
+  const readIdx = lines.findIndex((l) => l.trimEnd() === READ_HEADER);
+  if (readIdx === -1) return { result: content, removed: 0 };
+
+  // Count non-empty lines after the header (= archived entries)
+  const removed = lines.slice(readIdx + 1).filter((l) => l.trim() !== "").length;
+  const result = [...lines.slice(0, readIdx + 1), ""].join("\n");
+  return { result, removed };
+}
+
 function localDatetime(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
